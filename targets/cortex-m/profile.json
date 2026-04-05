@@ -1,17 +1,30 @@
 {
   "architecture": "ARMV7-M",
-  "profile": "GENERIC-CORTEX-M-SRAM-DEBUG",
+  "profile": "GENERIC-CORTEX-M-UART-PATCH-TABLE",
   "version": 1,
   "load_address": "0x20000000",
-  "stage1_descriptor_address": "0x20000800",
-  "stage1_image_address": "0x20001000",
-  "stage1_image_limit": "0x00004000",
+  "patch_table_offset": "0x00000040",
+  "patch_table": {
+    "magic": "0x51545442",
+    "version": "0x00000001",
+    "flags": "0x00000007",
+    "uart_base": "0x4000C000",
+    "uart_tx_off": "0x00000000",
+    "uart_rx_off": "0x00000000",
+    "uart_stat_off": "0x00000018",
+    "uart_tx_ready_mask": "0x00000020",
+    "uart_rx_ready_mask": "0x00000010",
+    "uart_tx_ready_polarity": "0x00000000",
+    "uart_rx_ready_polarity": "0x00000000"
+  },
   "stack_top": "0x20008000",
   "line_bytes": 16,
   "notes": [
-    "Load the stage-0 image at 0x20000000.",
+    "Load the seed image at 0x20000000.",
     "Set MSP from the first word in the image and PC from the second word.",
-    "Load the stage-1 image at 0x20001000, then write the stage-1 descriptor at 0x20000800.",
-    "Descriptor words are: magic, stage1_image_base, stage1_image_size, stage1_image_crc32."
+    "Patch table lives at seed_base + 0x40 and defaults to QEMU lm3s6965evb PL011 UART0 values.",
+    "Patch flags bit 0 enables UART, bit 1 enables RX, bit 2 enables TX, bit 3 selects debugger-only mode, bit 4 marks shared status semantics.",
+    "Use Forth-like words such as WORDS, INFO, PATCH, @, !, C@, C!, DUMP, LOAD, CRC32, and BOOT.",
+    "Example upload flow: 20001000 10 LOAD then 16 bytes of hex data, then 20001000 BOOT."
   ]
 }

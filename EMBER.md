@@ -1,208 +1,520 @@
-# Ember Bootstrap Design
+Paper Seed Bootstrap Design
 
-## Status
+Goal
 
-This repository now implements a minimal v1 ember for one concrete target:
+Design a paper-preservable bootstrap seed that can bring a controllable machine from near-zero state into a higher-level software environment.
 
-- ISA: `ARMV7-M`
-- Profile: `GENERIC-CORTEX-M-SRAM-DEBUG`
-- Transport: debugger-assisted SRAM writes
-- Integrity: CRC32 over the stage-1 image, CRC16-CCITT per paper row
-- Paper encoding: fixed-width hex, grouped as 16-bit words
+The emphasis here is not the final OS. The emphasis is the first rung:
+	•	bytes that can survive on paper
+	•	manually transcribed or machine-read
+	•	injected into RAM/flash through minimal means
+	•	able to establish a tiny execution environment
+	•	able to receive and verify a larger second-stage payload
+	•	able to hand off to some richer runtime later
 
-The point of this v1 is narrow: go from stage-0 source code to a Cortex-M machine-code image to a printable paper seed.
+This is a project about the reanimation path, not the full operating system.
 
-It does not try to solve universal board support, UART drivers, flash programming, or a general recovery monitor yet.
+⸻
 
----
+Design scope
 
-## Artifact Flow
+This document focuses primarily on the paper seed and the immediate bootstrap chain:
+	1.	Printed representation
+	2.	Manual or assisted transcription
+	3.	Tiny architecture-specific stage-0 seed
+	4.	Minimal transport protocol for stage-1
+	5.	Handoff contract into a later runtime
 
-```text
-targets/cortex-m/{startup.S,stage0.c,linker.ld}
-  -> arm-none-eabi-gcc
-  -> stage0.elf
-  -> objcopy
-  -> stage0.bin
-  -> tools/paper_seed.py
-  -> stage0.paper.txt
-  -> stage0.paper.pdf
-```
+Out of scope for now:
+	•	final OS choice
+	•	rich drivers
+	•	full filesystem design
+	•	full self-hosting toolchain
+	•	broad device support strategy
 
-Primary commands:
+⸻
 
-- `make paper`
-- `nix build .#cortex-m-paper-seed`
+Threat / failure model
 
----
+Assume a future where:
+	•	online repositories may be unavailable
+	•	package managers may be gone
+	•	vendor tooling may be missing
+	•	documentation may be incomplete
+	•	only partial hardware access is available
+	•	storage media may be damaged or absent
+	•	power, bandwidth, and compute may be constrained
 
-## Concrete Target
+Assume the operator may still have:
+	•	printed paper documents
+	•	basic wiring tools
+	•	a debugger/programmer path (JTAG, SWD, UART bootstrap, SPI programmer, etc.)
+	•	the ability to halt a CPU, write memory, and set the program counter
 
-### ISA
+Core assumption:
 
-- ARMv7-M
-- Thumb state
-- linked to run from SRAM at `0x20000000`
+If a machine can be halted, written, and resumed, it can potentially be reclaimed.
 
-### Platform profile
+⸻
 
-The v1 profile assumes only:
+System overview
 
-- writable SRAM starts at `0x20000000`
-- at least `32 KiB` of contiguous SRAM is available
-- a debugger can write memory, inspect memory, set registers, and resume execution
+The bootstrap ladder is now intentionally simplified:
 
-This is intentionally a debugger-first profile. It avoids pretending we already have a universal UART or flash path for all Cortex-M boards.
+Paper seed
+  -> manual / assisted entry
+  -> single seed blob in memory
+  -> seed boots into tiny Forth-based recovery monitor
+  -> recovery monitor receives larger payload
+  -> handoff into higher-level OS or environment
 
----
+Important distinction:
+	•	The paper seed is still architecture- and profile-specific.
+	•	But it is no longer split into a tiny stage-0 stub and separate stage-1 loader.
+	•	The seed itself should boot directly into a minimal, useful recovery monitor.
+	•	The higher-level OS remains intentionally unspecified.
 
-## Memory Layout
+⸻
 
-The current implementation uses these fixed addresses:
+First design principle
 
-| Region | Address | Purpose |
-| --- | --- | --- |
-| stage-0 image | `0x20000000` | paper-reconstructed ember image |
-| stage-1 descriptor | `0x20000800` | metadata written by the debugger |
-| stage-1 image | `0x20001000` | larger image to verify and run |
-| stack top | `0x20008000` | initial MSP for stage-0 |
+The paper seed should do as little as possible, but it should still land the operator in something immediately useful.
 
-Stage-1 maximum payload size in this profile is `0x00004000` bytes.
+So instead of a separate stage-0 and stage-1, the design now assumes a single seed blob that:
+	1.	establishes a known machine state
+	2.	initializes one communication path
+	3.	enters a tiny Forth-based recovery monitor
+	4.	allows upload / verification / handoff of larger payloads
 
----
+This keeps the architecture simpler and more honest.
 
-## Stage-0 Contract
+In one line:
 
-Stage-0 is a tiny SRAM-resident boot image with a Cortex-M vector table.
+The paper seed is a tiny architecture-specific bootstrap that lands directly in a minimal Forth recovery monitor.
 
-The operator or host tool:
+Constraint
 
-1. writes the stage-0 bytes to `0x20000000`
-2. sets `MSP = *(uint32_t *)0x20000000`
-3. sets `PC  = *(uint32_t *)0x20000004`
-4. writes the stage-1 image to `0x20001000`
-5. writes the stage-1 descriptor to `0x20000800`
-6. resumes the CPU
+This simplification only works if the seed stays small enough to remain realistic as a paper artifact.
 
-Stage-1 descriptor format:
+So the design must enforce a brutal size budget.
 
-```c
-struct ember_stage1_descriptor {
-  uint32_t magic;             // 0x31424d45 = "EMB1"
-  uint32_t stage1_image_base; // must be 0x20001000
-  uint32_t stage1_image_size; // bytes, min 8, max 0x4000
-  uint32_t stage1_image_crc32;
-};
-```
+⸻
 
-Stage-0 then:
+Paper seed requirements
 
-1. validates the stage-1 descriptor
-2. computes CRC32 over the stage-1 image
-3. reads the stage-1 vector table
-4. checks that the new MSP and reset handler point into SRAM
-5. sets `VTOR` to the stage-1 base
-6. loads the new MSP
-7. branches to the stage-1 reset handler
+The paper format should be:
+	•	human transcribable
+	•	easy to visually verify
+	•	damage tolerant
+	•	friendly to OCR / camera capture when available
+	•	line-localized, so a single transcription error is easy to isolate
+	•	architecture-labeled and unambiguous
 
-If any check fails, stage-0 enters a `bkpt` loop.
+Non-goals for the paper format
+	•	highest-density possible encoding
+	•	pretty typography
+	•	compactness at any cost
+	•	dependence on QR-only recovery
 
-This is the minimal reanimation path implemented in the repo.
+The system should still work if the operator is typing hex by hand.
 
----
+⸻
 
-## Paper Encoding
+Candidate paper format
 
-The paper seed is generated from the flat `stage0.bin` image.
+For each seed image, print a block like:
+	•	architecture
+	•	machine profile
+	•	version
+	•	load address
+	•	entry address
+	•	total length
+	•	whole-image checksum
+	•	line-by-line payload rows
+	•	line checksums
+	•	operator instructions
 
-Header fields:
+Example shape
 
-- architecture
-- profile
-- version
-- load address
-- initial MSP
-- entry address
-- total length
-- whole-image CRC32
+ARCH: ARMV7-M
+PROFILE: GENERIC-CORTEX-M-SRAM
+VERSION: 1
+LOAD: 0x20000000
+ENTRY: 0x20000001
+LEN: 0x00000120
+HASH32: 7A13C942
 
-Payload rows:
+0000: B508 4A1D 4B1E 4900 ... | C1A2
+0010: 6810 6018 1D12 429A ... | 72F0
+0020: ...                    | 9034
+...
 
-- `16` bytes per line
-- grouped as `4` hex digits per 16-bit word
-- left column is byte offset within the image
-- right column is CRC16-CCITT for that row
+Why fixed-width hex
 
-Example row shape:
+Fixed-width hex is likely the best first format because it is:
+	•	easy to print
+	•	easy to read aloud
+	•	easy to type
+	•	architecture-neutral at representation level
+	•	already natural for low-level debugging
 
-```text
-0010: 00F0 12F8 4FF0 0001 0021 8847 FEE7 0000 | 7A91
-```
+Base64 is denser but visually worse.
 
-The rows encode the raw little-endian image bytes. They are not instruction-disassembly words.
+⸻
 
----
+Redundancy strategy
 
-## Files
+A useful paper seed should assume transcription mistakes.
 
-Implementation files:
+Recommended redundancy:
+	•	per-line checksum
+	•	whole-image checksum
+	•	page number and image ID on every page
+	•	optional duplicate print with different grouping
+	•	optional parity or Reed-Solomon style recovery in a future version
 
-- `targets/cortex-m/startup.S`
-- `targets/cortex-m/stage0.c`
-- `targets/cortex-m/linker.ld`
-- `targets/cortex-m/profile.json`
-- `tools/paper_seed.py`
-- `Makefile`
+v1 recommendation
 
-Build outputs:
+Keep v1 simple:
+	•	per-line CRC or small checksum
+	•	whole-image CRC32
+	•	no advanced ECC yet
 
-- `build/cortex-m/stage0.elf`
-- `build/cortex-m/stage0.bin`
-- `build/cortex-m/stage0.lst`
-- `build/cortex-m/stage0.paper.txt`
-- `build/cortex-m/stage0.paper.pdf`
+The point is correctness with low conceptual overhead.
 
----
+⸻
 
-## Operator Workflow
+Seed granularity
 
-### Manual or mixed recovery
+A seed image should be extremely small.
 
-1. identify the `ARMV7-M / GENERIC-CORTEX-M-SRAM-DEBUG` profile
-2. reconstruct `stage0.bin` from the printed paper seed
-3. inject the image at `0x20000000`
-4. set `MSP` and `PC` from the first two vector words
-5. inject the stage-1 image at `0x20001000`
-6. compute and write the stage-1 descriptor values
-7. resume execution
+Target order of magnitude:
+	•	hundreds of bytes if possible
+	•	low single-digit kilobytes at absolute most
 
-### Machine-assisted recovery
+This is because paper is expensive in operator attention.
 
-If local tooling exists, the same binary can be reconstructed from `stage0.paper.txt` or the PDF rather than typed by hand. The printed form remains the preserved artifact.
+A good v1 seed should fit on:
+	•	one page ideally
+	•	two pages at most for a single architecture/profile
 
----
+If it takes many pages, the design is probably doing too much.
 
-## Non-Goals In This Repo Revision
+⸻
 
-This v1 does not yet implement:
+Architecture model
 
-- UART stage-1 transfer
-- flash writes
-- board auto-detection
-- payload signatures
-- ECC beyond row CRC and image CRC
-- a generic runtime handoff structure
+The project should distinguish between:
 
-For now, the handoff is native Cortex-M vector-table transfer into a verified SRAM image.
+ISA seed
 
----
+nArchitecture-specific machine code blob for a CPU family.
 
-## Next Useful Step
+Examples:
+	•	x86_64
+	•	aarch64
+	•	ARMv7-M
+	•	RV32I
+	•	RV64I
+	•	MIPS32
 
-The next practical extension is still within Cortex-M:
+Platform profile
 
-- keep the same paper format
-- keep the same stage-0 size discipline
-- add a second profile that receives stage-1 over UART instead of debugger memory writes
+Machine-specific execution assumptions.
 
-That would test the same ember model without broadening architecture scope too early.
+Examples:
+	•	loadable RAM region
+	•	stack location
+	•	UART base address
+	•	MMIO details
+	•	boot constraints
+
+So the real unit is not just “architecture”.
+It is:
+
+(seed ISA blob) + (platform profile)
+
+This avoids pretending one universal machine-code seed can boot every board in an ISA family without adaptation.
+
+⸻
+
+Seed responsibilities
+
+The seed is the tiny machine-code artifact represented on paper.
+
+Responsibilities:
+	1.	establish a valid stack
+	2.	clear or normalize minimal CPU state if needed
+	3.	initialize one communication path
+	4.	enter a tiny Forth-based recovery monitor
+	5.	support receiving a larger payload
+	6.	support basic integrity checking
+	7.	transfer control to a later runtime
+
+Strong non-goals
+
+The seed should not:
+	•	implement a rich shell
+	•	parse storage broadly
+	•	do dynamic memory allocation
+	•	support many transports at once
+	•	perform fancy decompression
+	•	become a general OS in miniature
+
+The recovery monitor should expose only a very small set of useful primitives.
+
+Forth monitor rationale
+
+A tiny Forth monitor is attractive because it is:
+	•	interactive
+	•	small
+	•	easy to extend
+	•	natural for memory inspection and hardware bring-up
+	•	compatible with the Collapse OS spirit
+
+But it must remain brutally constrained.
+
+Communication path
+
+Stage-0 should prefer one simple ingress path.
+
+Good candidates:
+	•	UART
+	•	debugger-assisted memory write then jump
+	•	SPI receive path on certain profiles
+	•	semihosting-like debugger channel on some targets
+
+Best default
+
+For many practical targets, UART is the best v1 default because it is:
+	•	simple
+	•	common
+	•	debuggable
+	•	easy to bridge from many tools
+
+But the design should allow profiles where stage-0 is entered through JTAG/SWD memory write and stage-1 is also loaded by debugger rather than UART.
+
+⸻
+
+Recovery monitor responsibilities
+
+The recovery monitor is entered directly from the seed.
+It is part of the seed design, not a separate stage.
+
+Responsibilities:
+	•	expose a tiny interactive Forth environment
+	•	support memory read/write
+	•	support payload upload
+	•	support payload integrity checks
+	•	optionally support flash write primitives on some profiles
+	•	prepare a handoff environment for later software
+
+Conceptual model
+	•	Seed = architecture-specific bootstrap blob
+	•	Recovery monitor = first useful foothold
+
+The monitor should be treated as part of the seed artifact, but conceptually it is the first usable layer above raw bring-up.
+
+Handoff contract
+
+Since the target OS is unspecified for now, define a neutral runtime handoff contract.
+
+Stage-1 should be able to hand control to a higher-level payload once these are true:
+	•	entrypoint address known
+	•	stack pointer valid
+	•	memory regions known
+	•	payload integrity verified
+	•	one console/debug path optionally initialized
+	•	any profile-specific boot parameters prepared
+
+Minimal handoff structure
+
+Example conceptual handoff block:
+
+struct handoff_info {
+  arch_id
+  profile_id
+  ram_base
+  ram_size
+  console_type
+  console_addr
+  payload_base
+  payload_size
+  flags
+}
+
+Stage-1 transfers control to:
+
+payload_entry(handoff_info*)
+
+This avoids tying the design too early to a particular OS.
+
+⸻
+
+Operator workflow
+
+Path A: full manual recovery
+	1.	identify architecture/profile
+	2.	transcribe stage-0 bytes from paper
+	3.	inject bytes into memory through debugger/programmer
+	4.	set entrypoint / PC
+	5.	run stage-0
+	6.	send stage-1 over chosen transport
+	7.	send higher-level payload
+	8.	hand off into runtime
+
+Path B: mixed paper + machine assistance
+	1.	use camera/OCR or local script to reconstruct stage-0 from paper
+	2.	verify checksums
+	3.	inject via debugger
+	4.	continue as above
+
+The paper should be sufficient, but machine assistance is welcome when available.
+
+⸻
+
+Suggested v1 constraints
+
+To keep the project real, v1 should choose:
+	•	one ISA
+	•	one platform profile
+	•	one paper encoding
+	•	one communication path
+	•	one integrity scheme
+	•	one tiny Forth monitor
+	•	one handoff path into a larger runtime
+
+Example v1:
+	•	ISA: ARMv7-M
+	•	profile: generic SRAM + UART profile
+	•	encoding: fixed-width hex words + line CRC
+	•	comms: UART receive
+	•	monitor: tiny Forth-based recovery environment
+
+That is enough to validate the concept.
+
+⸻
+
+Tiny payload protocol
+
+Keep it boring.
+
+Packet fields:
+	•	type
+	•	target address
+	•	length
+	•	payload bytes
+	•	checksum
+
+Commands:
+	•	WRITE
+	•	VERIFY
+	•	JUMP
+	•	PING
+	•	INFO
+
+Possible flow:
+	1.	PING
+	2.	WRITE chunks
+	3.	VERIFY whole payload
+	4.	JUMP entry
+
+No negotiation complexity unless needed.
+
+The protocol should be simple enough to implement using the primitives exposed by the Forth recovery monitor.
+
+The protocol should be simple enough to implement using the primitives exposed by the Forth recovery monitor.
+
+⸻
+
+Integrity model
+
+v1 integrity should protect mainly against:
+	•	transcription errors
+	•	line swaps
+	•	transfer corruption
+	•	obvious wrong-image mistakes
+
+It does not need to solve full adversarial authenticity yet.
+
+Recommended v1:
+	•	paper lines: per-line checksum
+	•	seed image: CRC32 or similar whole-image checksum
+	•	payload transfer: packet checksum + whole-image checksum
+
+Later versions may add:
+	•	signatures
+	•	Merkle chunking
+	•	stronger ECC
+	•	printed public keys / trust roots
+
+⸻
+
+Design values
+
+This project should optimize for:
+	•	preservability
+	•	legibility
+	•	small trusted base
+	•	cross-platform conceptual consistency
+	•	operator comprehensibility
+	•	graceful recovery from mistakes
+
+Not for:
+	•	maximum speed
+	•	minimal byte count at all costs
+	•	aesthetic cleverness
+	•	broad hardware support on day one
+
+⸻
+
+What makes the idea interesting
+
+Most software assumes:
+	•	storage
+	•	network
+	•	package repositories
+	•	vendor tools
+	•	rich OS support
+	•	stable supply chains
+
+This design starts lower.
+
+It asks:
+
+What is the smallest printed artifact that can restore a path back into software?
+
+That is the heart of the project.
+
+⸻
+
+Open questions
+	1.	What checksum scheme is best for manual workflows?
+	2.	Should the paper format be word-oriented or byte-oriented?
+	3.	How much platform information should be embedded in the seed vs the profile sheet?
+	4.	Should stage-0 ever support more than one transport?
+	5.	How should the operator identify the correct profile for an unknown board?
+	6.	What is the best first target architecture?
+	7.	Should the handoff contract be binary, textual, or both?
+
+⸻
+
+Recommended next step
+
+Write a v1 specification for exactly one target with these sections:
+	1.	ISA and platform profile
+	2.	paper encoding format
+	3.	seed binary layout
+	4.	entry/load semantics
+	5.	UART or debugger transport details
+	6.	tiny Forth monitor primitives
+	7.	payload packet format
+	8.	handoff contract
+
+That will force the concept into something testable.
+
+⸻
+
+One-sentence summary
+
+A paper seed bootstrap is a tiny printed, architecture-specific machine-code artifact that can be manually or mechanically reconstructed, injected into controllable hardware, and used to load a larger recovery payload that hands off into a higher-level runtime.

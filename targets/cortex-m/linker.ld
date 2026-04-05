@@ -14,6 +14,11 @@ SECTIONS
     KEEP(*(.isr_vector))
   } > SRAM
 
+  .patch_table : ALIGN(4)
+  {
+    KEEP(*(.patch_table))
+  } > SRAM
+
   .text : ALIGN(4)
   {
     *(.text*)

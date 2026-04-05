@@ -10,19 +10,19 @@ SIZE := $(ARM_CROSS_COMPILE)size
 PYTHON ?= python3
 
 CFLAGS := -mcpu=cortex-m3 -mthumb -Os -g3 -ffreestanding -fno-builtin -fdata-sections -ffunction-sections -Wall -Wextra -Werror -std=c11
-LDFLAGS := -nostdlib -nostartfiles -Wl,--gc-sections -Wl,-Map=$(OUT_DIR)/stage0.map -T $(TARGET_DIR)/linker.ld
+LDFLAGS := -nostdlib -nostartfiles -Wl,--gc-sections -Wl,-Map=$(OUT_DIR)/seed.map -T $(TARGET_DIR)/linker.ld
 
-STAGE0_ELF := $(OUT_DIR)/stage0.elf
-STAGE0_BIN := $(OUT_DIR)/stage0.bin
-STAGE0_LISTING := $(OUT_DIR)/stage0.lst
-STAGE0_TEXT := $(OUT_DIR)/stage0.paper.txt
-STAGE0_PDF := $(OUT_DIR)/stage0.paper.pdf
+SEED_ELF := $(OUT_DIR)/seed.elf
+SEED_BIN := $(OUT_DIR)/seed.bin
+SEED_LISTING := $(OUT_DIR)/seed.lst
+SEED_TEXT := $(OUT_DIR)/seed.paper.txt
+SEED_PDF := $(OUT_DIR)/seed.paper.pdf
 
 .PHONY: all clean paper cortex-m-paper
 
 all: paper
 
-paper: $(STAGE0_LISTING) $(STAGE0_TEXT) $(STAGE0_PDF)
+paper: $(SEED_LISTING) $(SEED_TEXT) $(SEED_PDF)
 
 cortex-m-paper: paper
 
@@ -32,24 +32,24 @@ clean:
 $(OUT_DIR):
 	mkdir -p $(OUT_DIR)
 
-$(STAGE0_ELF): $(TARGET_DIR)/startup.S $(TARGET_DIR)/stage0.c $(TARGET_DIR)/linker.ld | $(OUT_DIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(TARGET_DIR)/startup.S $(TARGET_DIR)/stage0.c
+$(SEED_ELF): $(TARGET_DIR)/startup.S $(TARGET_DIR)/seed.c $(TARGET_DIR)/linker.ld | $(OUT_DIR)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(TARGET_DIR)/startup.S $(TARGET_DIR)/seed.c
 	$(SIZE) $@
 
-$(STAGE0_BIN): $(STAGE0_ELF)
+$(SEED_BIN): $(SEED_ELF)
 	$(OBJCOPY) -O binary $< $@
 
-$(STAGE0_LISTING): $(STAGE0_ELF)
+$(SEED_LISTING): $(SEED_ELF)
 	$(OBJDUMP) -D $< > $@
 
-$(STAGE0_TEXT): $(STAGE0_BIN) $(TARGET_DIR)/profile.json | $(OUT_DIR)
+$(SEED_TEXT): $(SEED_BIN) $(TARGET_DIR)/profile.json tools/paper_seed.py | $(OUT_DIR)
 	$(PYTHON) tools/paper_seed.py \
 		--profile $(TARGET_DIR)/profile.json \
-		--input $(STAGE0_BIN) \
+		--input $(SEED_BIN) \
 		--text $@
 
-$(STAGE0_PDF): $(STAGE0_BIN) $(TARGET_DIR)/profile.json | $(OUT_DIR)
+$(SEED_PDF): $(SEED_BIN) $(TARGET_DIR)/profile.json tools/paper_seed.py | $(OUT_DIR)
 	$(PYTHON) tools/paper_seed.py \
 		--profile $(TARGET_DIR)/profile.json \
-		--input $(STAGE0_BIN) \
+		--input $(SEED_BIN) \
 		--pdf $@

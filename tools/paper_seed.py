@@ -20,6 +20,10 @@ def parse_u32(value):
     return int(value, 0)
 
 
+def format_hex32(value):
+    return f"0x{value:08X}"
+
+
 def crc16_ccitt(data):
     crc = 0xFFFF
     for byte in data:
@@ -67,10 +71,35 @@ def build_document(profile, data):
         f"LEN: 0x{len(data):08X}",
         f"HASH32: {whole_crc:08X}",
         "",
+    ]
+
+    patch_table = profile.get("patch_table")
+    if patch_table is not None:
+        lines.extend(
+            [
+                f"PATCH TABLE OFFSET: {format_hex32(parse_u32(profile['patch_table_offset']))}",
+                f"PATCH MAGIC: {format_hex32(parse_u32(patch_table['magic']))}",
+                f"PATCH VERSION: {format_hex32(parse_u32(patch_table['version']))}",
+                f"PATCH FLAGS: {format_hex32(parse_u32(patch_table['flags']))}",
+                f"PATCH UART BASE: {format_hex32(parse_u32(patch_table['uart_base']))}",
+                f"PATCH UART TX OFF: {format_hex32(parse_u32(patch_table['uart_tx_off']))}",
+                f"PATCH UART RX OFF: {format_hex32(parse_u32(patch_table['uart_rx_off']))}",
+                f"PATCH UART STAT OFF: {format_hex32(parse_u32(patch_table['uart_stat_off']))}",
+                f"PATCH UART TX MASK: {format_hex32(parse_u32(patch_table['uart_tx_ready_mask']))}",
+                f"PATCH UART RX MASK: {format_hex32(parse_u32(patch_table['uart_rx_ready_mask']))}",
+                f"PATCH UART TX POL: {format_hex32(parse_u32(patch_table['uart_tx_ready_polarity']))}",
+                f"PATCH UART RX POL: {format_hex32(parse_u32(patch_table['uart_rx_ready_polarity']))}",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
         "ROWS: little-endian image bytes grouped as 16-bit hex words.",
         "CHECK: per-row CRC16-CCITT in the right column.",
         "",
-    ]
+        ]
+    )
     lines.extend(format_rows(data, line_bytes))
     lines.extend(["", "OPERATOR NOTES:"])
     lines.extend(f"- {note}" for note in profile.get("notes", []))
@@ -116,7 +145,7 @@ def write_pdf(path, lines):
 def main():
     parser = argparse.ArgumentParser(description="Render an ember seed as text and PDF.")
     parser.add_argument("--profile", required=True, help="Path to the target profile JSON.")
-    parser.add_argument("--input", required=True, help="Flat binary stage-0 image.")
+    parser.add_argument("--input", required=True, help="Flat seed image.")
     parser.add_argument("--text", help="Write the paper seed as plain text.")
     parser.add_argument("--pdf", help="Write the paper seed as PDF.")
     args = parser.parse_args()
@@ -127,7 +156,7 @@ def main():
     profile = read_profile(args.profile)
     data = Path(args.input).read_bytes()
     if len(data) < 8:
-        raise SystemExit("stage-0 image must include at least an MSP and entry vector")
+        raise SystemExit("seed image must include at least an MSP and entry vector")
 
     lines = build_document(profile, data)
 

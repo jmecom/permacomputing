@@ -28,7 +28,7 @@ __vector_table:
 Reset_Handler:
   cpsid i
   ldr sp, =_stack_top
-  bl stage0_main
+  bl seed_main
 
 .thumb_func
 Default_Handler:
