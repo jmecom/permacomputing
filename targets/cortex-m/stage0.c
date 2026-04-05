@@ -1,19 +1,19 @@
 #include <stdint.h>
 
 #define EMBER_MAGIC 0x31424d45u
-#define EMBER_PAYLOAD_BASE 0x20001000u
-#define EMBER_PAYLOAD_LIMIT 0x00004000u
+#define EMBER_STAGE1_IMAGE_BASE 0x20001000u
+#define EMBER_STAGE1_IMAGE_LIMIT 0x00004000u
 #define EMBER_RAM_BASE 0x20000000u
 #define EMBER_RAM_TOP 0x20008000u
-#define EMBER_MAILBOX_ADDR 0x20000800u
+#define EMBER_STAGE1_DESCRIPTOR_ADDR 0x20000800u
 #define SCB_VTOR_ADDR 0xe000ed08u
 
 typedef struct {
   uint32_t magic;
-  uint32_t payload_base;
-  uint32_t payload_size;
-  uint32_t payload_crc32;
-} ember_mailbox_t;
+  uint32_t stage1_image_base;
+  uint32_t stage1_image_size;
+  uint32_t stage1_image_crc32;
+} ember_stage1_descriptor_t;
 
 static inline void disable_irq(void) {
   __asm__ volatile ("cpsid i" : : : "memory");
@@ -58,27 +58,30 @@ static int address_in_sram(uint32_t address) {
 }
 
 __attribute__((noreturn)) void stage0_main(void) {
-  const ember_mailbox_t *mailbox = (const ember_mailbox_t *)EMBER_MAILBOX_ADDR;
+  const ember_stage1_descriptor_t *stage1_descriptor =
+      (const ember_stage1_descriptor_t *)EMBER_STAGE1_DESCRIPTOR_ADDR;
 
-  if (mailbox->magic != EMBER_MAGIC) {
+  if (stage1_descriptor->magic != EMBER_MAGIC) {
     fail();
   }
 
-  if (mailbox->payload_base != EMBER_PAYLOAD_BASE) {
+  if (stage1_descriptor->stage1_image_base != EMBER_STAGE1_IMAGE_BASE) {
     fail();
   }
 
-  if (mailbox->payload_size < 8u || mailbox->payload_size > EMBER_PAYLOAD_LIMIT) {
+  if (stage1_descriptor->stage1_image_size < 8u ||
+      stage1_descriptor->stage1_image_size > EMBER_STAGE1_IMAGE_LIMIT) {
     fail();
   }
 
-  const uint8_t *payload = (const uint8_t *)mailbox->payload_base;
+  const uint8_t *stage1_image = (const uint8_t *)stage1_descriptor->stage1_image_base;
 
-  if (crc32(payload, mailbox->payload_size) != mailbox->payload_crc32) {
+  if (crc32(stage1_image, stage1_descriptor->stage1_image_size) !=
+      stage1_descriptor->stage1_image_crc32) {
     fail();
   }
 
-  const uint32_t *vector = (const uint32_t *)payload;
+  const uint32_t *vector = (const uint32_t *)stage1_image;
   uint32_t next_msp = vector[0];
   uint32_t next_pc = vector[1];
 
@@ -91,7 +94,7 @@ __attribute__((noreturn)) void stage0_main(void) {
   }
 
   disable_irq();
-  set_vtor(mailbox->payload_base);
+  set_vtor(stage1_descriptor->stage1_image_base);
   barrier();
   set_msp(next_msp);
 

@@ -63,8 +63,8 @@ The current implementation uses these fixed addresses:
 | Region | Address | Purpose |
 | --- | --- | --- |
 | stage-0 image | `0x20000000` | paper-reconstructed ember image |
-| mailbox | `0x20000800` | stage-1 metadata written by the debugger |
-| stage-1 payload | `0x20001000` | larger image to verify and run |
+| stage-1 descriptor | `0x20000800` | metadata written by the debugger |
+| stage-1 image | `0x20001000` | larger image to verify and run |
 | stack top | `0x20008000` | initial MSP for stage-0 |
 
 Stage-1 maximum payload size in this profile is `0x00004000` bytes.
@@ -81,23 +81,23 @@ The operator or host tool:
 2. sets `MSP = *(uint32_t *)0x20000000`
 3. sets `PC  = *(uint32_t *)0x20000004`
 4. writes the stage-1 image to `0x20001000`
-5. writes the mailbox to `0x20000800`
+5. writes the stage-1 descriptor to `0x20000800`
 6. resumes the CPU
 
-Mailbox format:
+Stage-1 descriptor format:
 
 ```c
-struct ember_mailbox {
-  uint32_t magic;        // 0x31424d45 = "EMB1"
-  uint32_t payload_base; // must be 0x20001000
-  uint32_t payload_size; // bytes, min 8, max 0x4000
-  uint32_t payload_crc32;
+struct ember_stage1_descriptor {
+  uint32_t magic;             // 0x31424d45 = "EMB1"
+  uint32_t stage1_image_base; // must be 0x20001000
+  uint32_t stage1_image_size; // bytes, min 8, max 0x4000
+  uint32_t stage1_image_crc32;
 };
 ```
 
 Stage-0 then:
 
-1. validates the mailbox
+1. validates the stage-1 descriptor
 2. computes CRC32 over the stage-1 image
 3. reads the stage-1 vector table
 4. checks that the new MSP and reset handler point into SRAM
@@ -173,7 +173,7 @@ Build outputs:
 3. inject the image at `0x20000000`
 4. set `MSP` and `PC` from the first two vector words
 5. inject the stage-1 image at `0x20001000`
-6. compute and write the mailbox values
+6. compute and write the stage-1 descriptor values
 7. resume execution
 
 ### Machine-assisted recovery
