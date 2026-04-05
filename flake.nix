@@ -28,6 +28,43 @@
     {
       formatter = forAllSystems (pkgs: pkgs.nixfmt);
 
+      packages = forAllSystems (
+        pkgs:
+        let
+          armToolchain = pkgs.pkgsCross.arm-embedded.buildPackages;
+          pythonEnv = pkgs.python3.withPackages (ps: [ ps.reportlab ]);
+        in
+        rec {
+          cortex-m-paper-seed = pkgs.stdenvNoCC.mkDerivation {
+            pname = "cortex-m-paper-seed";
+            version = "0.1.0";
+            src = ./.;
+
+            nativeBuildInputs = [
+              armToolchain.binutils
+              armToolchain.gcc
+              pkgs.gnumake
+              pythonEnv
+            ];
+
+            buildPhase = ''
+              runHook preBuild
+              make OUT_DIR=$PWD/dist/cortex-m paper
+              runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out
+              cp -R dist/cortex-m/. $out/
+              runHook postInstall
+            '';
+          };
+
+          default = cortex-m-paper-seed;
+        }
+      );
+
       devShells = forAllSystems (
         pkgs:
         let
@@ -35,6 +72,7 @@
           aarch64Toolchain = pkgs.pkgsCross.aarch64-embedded.buildPackages;
           avrToolchain = pkgs.pkgsCross.avr.buildPackages;
           mipsToolchain = pkgs.pkgsCross.mips-embedded.buildPackages;
+          pythonEnv = pkgs.python3.withPackages (ps: [ ps.reportlab ]);
           riscv32Toolchain = pkgs.pkgsCross.riscv32-embedded.buildPackages;
           riscv64Toolchain = pkgs.pkgsCross.riscv64-embedded.buildPackages;
           makeQemuLauncher =
@@ -140,7 +178,7 @@
               nasm
               openocd
               picocom
-              python3
+              pythonEnv
               qemu
               qemuHelper
               sjasmplus

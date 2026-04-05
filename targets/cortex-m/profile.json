@@ -1,0 +1,17 @@
+{
+  "architecture": "ARMV7-M",
+  "profile": "GENERIC-CORTEX-M-SRAM-DEBUG",
+  "version": 1,
+  "load_address": "0x20000000",
+  "mailbox_address": "0x20000800",
+  "payload_address": "0x20001000",
+  "payload_limit": "0x00004000",
+  "stack_top": "0x20008000",
+  "line_bytes": 16,
+  "notes": [
+    "Load the stage-0 image at 0x20000000.",
+    "Set MSP from the first word in the image and PC from the second word.",
+    "Load the stage-1 image at 0x20001000, then write the mailbox at 0x20000800.",
+    "Mailbox words are: magic, payload_base, payload_size, payload_crc32."
+  ]
+}
