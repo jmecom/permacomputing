@@ -1,9 +1,23 @@
 {
   "architecture": "ARMV7-M",
-  "profile": "GENERIC-CORTEX-M-UART-PATCH-TABLE",
+  "seed_profile": "GENERIC-CORTEX-M-UART-PATCH-TABLE",
+  "patch_profile": "QEMU-LM3S6965EVB-UART0",
   "version": 1,
   "load_address": "0x20000000",
   "patch_table_offset": "0x00000040",
+  "seed_patch_defaults": {
+    "magic": "0x51545442",
+    "version": "0x00000001",
+    "flags": "0x00000008",
+    "uart_base": "0x00000000",
+    "uart_tx_off": "0x00000000",
+    "uart_rx_off": "0x00000000",
+    "uart_stat_off": "0x00000000",
+    "uart_tx_ready_mask": "0x00000000",
+    "uart_rx_ready_mask": "0x00000000",
+    "uart_tx_ready_polarity": "0x00000000",
+    "uart_rx_ready_polarity": "0x00000000"
+  },
   "patch_table": {
     "magic": "0x51545442",
     "version": "0x00000001",
@@ -19,12 +33,20 @@
   },
   "stack_top": "0x20008000",
   "line_bytes": 16,
-  "notes": [
+  "seed_notes": [
     "Load the seed image at 0x20000000.",
-    "Set MSP from the first word in the image and PC from the second word.",
-    "Patch table lives at seed_base + 0x40 and defaults to QEMU lm3s6965evb PL011 UART0 values.",
+    "Before first run, apply the separate profile patch sheet to seed_base + 0x40 through the debugger.",
+    "Set MSP from the first word in the image and PC from the second word after patching.",
+    "For each row, add all bytes and keep the low 8 bits for S. XOR all bytes for X.",
+    "Verify each row before entry, then verify HASH32 after reconstructing the full image.",
+    "Patch table lives at seed_base + 0x40. The embedded seed defaults keep UART disabled until patched.",
+    "After the patch sheet is applied, the monitor words are: ?, I, P, ., @, !, C@, C!, L, X, B."
+  ],
+  "patch_notes": [
+    "These writes are applied after the generic seed is loaded and before the seed is started.",
+    "Write the values below to seed_base + patch_table_offset using SWD, JTAG, or another debugger/programmer path.",
+    "Read back the written words to verify them, then set MSP and PC from the seed vector table and resume execution.",
     "Patch flags bit 0 enables UART, bit 1 enables RX, bit 2 enables TX, bit 3 selects debugger-only mode, bit 4 marks shared status semantics.",
-    "Use Forth-like words such as WORDS, INFO, PATCH, @, !, C@, C!, DUMP, LOAD, CRC32, and BOOT.",
-    "Example upload flow: 20001000 10 LOAD then 16 bytes of hex data, then 20001000 BOOT."
+    "Example post-patch monitor flow: 20001000 10 L then 16 bytes of hex data, then 20001000 B."
   ]
 }

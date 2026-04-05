@@ -176,11 +176,17 @@ Recommended redundancy:
 v1 recommendation
 
 Keep v1 simple:
-	•	per-line CRC or small checksum
+	•	per-line byte sum mod 256 plus XOR byte
 	•	whole-image CRC32
 	•	no advanced ECC yet
 
 The point is correctness with low conceptual overhead.
+
+Operator rule of thumb:
+	•	S is the low 8 bits of the byte sum for a row
+	•	X is the bytewise XOR for that row
+	•	check each row locally while transcribing
+	•	check the whole-image CRC32 after reconstructing the full seed
 
 ⸻
 
@@ -438,7 +444,7 @@ v1 integrity should protect mainly against:
 It does not need to solve full adversarial authenticity yet.
 
 Recommended v1:
-	•	paper lines: per-line checksum
+	•	paper lines: byte sum mod 256 plus XOR byte
 	•	seed image: CRC32 or similar whole-image checksum
 	•	payload transfer: packet checksum + whole-image checksum
 

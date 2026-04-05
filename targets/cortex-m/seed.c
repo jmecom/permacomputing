@@ -38,13 +38,13 @@ extern uint32_t __vector_table;
 __attribute__((section(".patch_table"), used)) const io_patch_table_t default_io_patch_table = {
     .magic = IO_PATCH_TABLE_MAGIC,
     .version = IO_PATCH_TABLE_VERSION,
-    .flags = IO_FLAG_UART_ENABLED | IO_FLAG_UART_RX | IO_FLAG_UART_TX,
-    .uart_base = 0x4000c000u,
+    .flags = IO_FLAG_DEBUGGER_ONLY,
+    .uart_base = 0u,
     .uart_tx_off = 0x00000000u,
     .uart_rx_off = 0x00000000u,
-    .uart_stat_off = 0x00000018u,
-    .uart_tx_ready_mask = 0x00000020u,
-    .uart_rx_ready_mask = 0x00000010u,
+    .uart_stat_off = 0x00000000u,
+    .uart_tx_ready_mask = 0x00000000u,
+    .uart_rx_ready_mask = 0x00000000u,
     .uart_tx_ready_polarity = 0u,
     .uart_rx_ready_polarity = 0u,
 };
