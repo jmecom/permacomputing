@@ -1,52 +1,22 @@
 {
   "architecture": "ARMV7-M",
-  "seed_profile": "GENERIC-CORTEX-M-UART-PATCH-TABLE",
-  "patch_profile": "QEMU-LM3S6965EVB-UART0",
+  "profile": "GENERIC-CORTEX-M-SRAM-DEBUGGER",
   "version": 1,
   "load_address": "0x20000000",
-  "patch_table_offset": "0x00000040",
-  "seed_patch_defaults": {
-    "magic": "0x51545442",
-    "version": "0x00000001",
-    "flags": "0x00000008",
-    "uart_base": "0x00000000",
-    "uart_tx_off": "0x00000000",
-    "uart_rx_off": "0x00000000",
-    "uart_stat_off": "0x00000000",
-    "uart_tx_ready_mask": "0x00000000",
-    "uart_rx_ready_mask": "0x00000000",
-    "uart_tx_ready_polarity": "0x00000000",
-    "uart_rx_ready_polarity": "0x00000000"
-  },
-  "patch_table": {
-    "magic": "0x51545442",
-    "version": "0x00000001",
-    "flags": "0x00000007",
-    "uart_base": "0x4000C000",
-    "uart_tx_off": "0x00000000",
-    "uart_rx_off": "0x00000000",
-    "uart_stat_off": "0x00000018",
-    "uart_tx_ready_mask": "0x00000020",
-    "uart_rx_ready_mask": "0x00000010",
-    "uart_tx_ready_polarity": "0x00000000",
-    "uart_rx_ready_polarity": "0x00000000"
-  },
+  "recovery_handoff_address": "0x20000800",
+  "recovery_payload_address": "0x20001000",
+  "recovery_payload_limit": "0x00004000",
+  "recovery_handoff_magic": "0x31424D45",
   "stack_top": "0x20008000",
   "line_bytes": 16,
-  "seed_notes": [
+  "notes": [
     "Load the seed image at 0x20000000.",
-    "Before first run, apply the separate profile patch sheet to seed_base + 0x40 through the debugger.",
-    "Set MSP from the first word in the image and PC from the second word after patching.",
+    "Load the larger recovery payload at 0x20001000 through the debugger before starting the seed.",
+    "Write the handoff block at 0x20000800 as: magic, payload_base, payload_size, payload_crc32.",
+    "Set MSP from the first word in the seed image and PC from the second word in the seed image.",
     "For each row, add all bytes and keep the low 8 bits for S. XOR all bytes for X.",
     "Verify each row before entry, then verify HASH32 after reconstructing the full image.",
-    "Patch table lives at seed_base + 0x40. The embedded seed defaults keep UART disabled until patched.",
-    "After the patch sheet is applied, the monitor words are: ?, I, P, ., @, !, C@, C!, L, X, B."
-  ],
-  "patch_notes": [
-    "These writes are applied after the generic seed is loaded and before the seed is started.",
-    "Write the values below to seed_base + patch_table_offset using SWD, JTAG, or another debugger/programmer path.",
-    "Read back the written words to verify them, then set MSP and PC from the seed vector table and resume execution.",
-    "Patch flags bit 0 enables UART, bit 1 enables RX, bit 2 enables TX, bit 3 selects debugger-only mode, bit 4 marks shared status semantics.",
-    "Example post-patch monitor flow: 20001000 10 L then 16 bytes of hex data, then 20001000 B."
+    "If the handoff block is invalid or the payload CRC32 does not match, the seed traps in a bkpt loop.",
+    "The seed is debugger-first in this profile. It does not require UART for initial ingress."
   ]
 }

@@ -8,9 +8,9 @@ The emphasis here is not the final OS. The emphasis is the first rung:
 	•	bytes that can survive on paper
 	•	manually transcribed or machine-read
 	•	injected into RAM/flash through minimal means
-	•	able to establish a tiny execution environment
-	•	able to receive and verify a larger second-stage payload
-	•	able to hand off to some richer runtime later
+	•	able to establish a tiny execution foothold
+	•	able to hand off to a larger recovery payload
+	•	able to eventually bootstrap a usable development environment for that machine
 
 This is a project about the reanimation path, not the full operating system.
 
@@ -21,9 +21,9 @@ Design scope
 This document focuses primarily on the paper seed and the immediate bootstrap chain:
 	1.	Printed representation
 	2.	Manual or assisted transcription
-	3.	Tiny architecture-specific stage-0 seed
-	4.	Minimal transport protocol for stage-1
-	5.	Handoff contract into a later runtime
+	3.	Tiny architecture-specific seed
+	4.	Debugger-assisted ingress
+	5.	Handoff into a larger recovery payload
 
 Out of scope for now:
 	•	final OS choice
@@ -57,46 +57,107 @@ If a machine can be halted, written, and resumed, it can potentially be reclaime
 
 ⸻
 
+Core clarification
+
+The seed is not automatically a UART monitor, a shell, or a tiny OS.
+
+The seed is:
+
+the first paper-preserved executable foothold
+
+That means the seed only earns its keep if it does something useful after the operator has injected bytes into memory.
+
+Concretely, the seed should turn:
+
+I can inject bytes with a debugger
+
+into:
+
+I have a repeatable target-side control contract
+
+If a debugger can already load a larger recovery payload directly and jump to it safely, then a separate tiny pre-seed may be unnecessary. In that case, the first useful recovery payload is the seed.
+
+So the project should not force an extra stage just because bootstraps often have one.
+
+⸻
+
 System overview
 
-The bootstrap ladder is now intentionally simplified:
+The bootstrap ladder is:
 
 Paper seed
-  -> manual / assisted entry
-  -> single seed blob in memory
-  -> seed boots into tiny Forth-based recovery monitor
-  -> recovery monitor receives larger payload
-  -> handoff into higher-level OS or environment
+  -> manual / assisted reconstruction
+  -> debugger/programmer writes seed into memory
+  -> debugger/programmer may also write a larger recovery payload
+  -> seed establishes a known execution foothold
+  -> seed transfers control to the larger recovery payload
+  -> recovery payload grows into a usable development environment
 
 Important distinction:
-	•	The paper seed is still architecture- and profile-specific.
-	•	But it is no longer split into a tiny stage-0 stub and separate stage-1 loader.
-	•	The seed itself should boot directly into a minimal, useful recovery monitor.
-	•	The higher-level OS remains intentionally unspecified.
+	•	The seed is architecture- and profile-specific.
+	•	The seed is debugger-ingressed in v1.
+	•	UART is optional, not fundamental.
+	•	The development environment does not need to exist inside the seed itself.
 
 ⸻
 
 First design principle
 
-The paper seed should do as little as possible, but it should still land the operator in something immediately useful.
+The paper seed should do as little as possible while still making the next step reliable.
 
-So instead of a separate stage-0 and stage-1, the design now assumes a single seed blob that:
-	1.	establishes a known machine state
-	2.	initializes one communication path
-	3.	enters a tiny Forth-based recovery monitor
-	4.	allows upload / verification / handoff of larger payloads
-
-This keeps the architecture simpler and more honest.
+That usually means:
+	1.	establish a known machine state
+	2.	expose a tiny preserved control contract
+	3.	accept or interpret a small amount of operator intent
+	4.	transfer control to a larger recovery payload in a disciplined way
 
 In one line:
 
-The paper seed is a tiny architecture-specific bootstrap that lands directly in a minimal Forth recovery monitor.
+The paper seed is the smallest preserved executable that turns debugger-ingressed bytes into a repeatable target-side foothold.
 
 Constraint
 
-This simplification only works if the seed stays small enough to remain realistic as a paper artifact.
+This only works if the seed stays small enough to remain realistic as a paper artifact.
 
 So the design must enforce a brutal size budget.
+
+⸻
+
+What the seed is actually doing
+
+The seed should not be thought of as “the whole recovery environment.”
+
+The seed is doing one of two useful jobs:
+
+1.	Tiny verify-and-jump foothold
+	•	assumes the next payload is debugger-loaded
+	•	optionally checks a header or checksum
+	•	transfers control in a disciplined way
+	•	very small
+
+2.	Tiny interactive foothold
+	•	exposes a very small stack language or monitor
+	•	supports a few primitives like read, write, verify, and jump
+	•	still assumes debugger ingress for the seed itself
+	•	larger, but more useful
+
+The seed should not try to be the development environment. The larger recovery payload after the seed is where the real climb begins.
+
+⸻
+
+Debugger-first v1
+
+For v1, debugger access is enough for ingress.
+
+That means:
+	•	the seed itself does not need UART in order to exist
+	•	the operator can load the seed with SWD/JTAG or equivalent
+	•	the operator can also load the next payload the same way
+	•	the seed’s purpose is then to provide a small preserved handoff contract
+
+This is cleaner than pretending UART exists before the system has been configured well enough to use it.
+
+UART can still matter later, but it should not define the essence of the seed.
 
 ⸻
 
@@ -110,7 +171,7 @@ The paper format should be:
 	•	line-localized, so a single transcription error is easy to isolate
 	•	architecture-labeled and unambiguous
 
-Non-goals for the paper format
+Non-goals for the paper format:
 	•	highest-density possible encoding
 	•	pretty typography
 	•	compactness at any cost
@@ -131,22 +192,22 @@ For each seed image, print a block like:
 	•	total length
 	•	whole-image checksum
 	•	line-by-line payload rows
-	•	line checksums
+	•	line checks
 	•	operator instructions
 
 Example shape
 
 ARCH: ARMV7-M
-PROFILE: GENERIC-CORTEX-M-SRAM
+PROFILE: GENERIC-CORTEX-M
 VERSION: 1
 LOAD: 0x20000000
 ENTRY: 0x20000001
 LEN: 0x00000120
 HASH32: 7A13C942
 
-0000: B508 4A1D 4B1E 4900 ... | C1A2
-0010: 6810 6018 1D12 429A ... | 72F0
-0020: ...                    | 9034
+0000: B508 4A1D 4B1E 4900 ... | S=9C X=70
+0010: 6810 6018 1D12 429A ... | S=54 X=1F
+0020: ...                    | S=34 X=A2
 ...
 
 Why fixed-width hex
@@ -214,7 +275,7 @@ The project should distinguish between:
 
 ISA seed
 
-nArchitecture-specific machine code blob for a CPU family.
+Architecture-specific machine code blob for a CPU family.
 
 Examples:
 	•	x86_64
@@ -231,9 +292,9 @@ Machine-specific execution assumptions.
 Examples:
 	•	loadable RAM region
 	•	stack location
-	•	UART base address
-	•	MMIO details
-	•	boot constraints
+	•	reset-state assumptions
+	•	debugger ingress assumptions
+	•	optional transport assumptions
 
 So the real unit is not just “architecture”.
 It is:
@@ -251,11 +312,9 @@ The seed is the tiny machine-code artifact represented on paper.
 Responsibilities:
 	1.	establish a valid stack
 	2.	clear or normalize minimal CPU state if needed
-	3.	initialize one communication path
-	4.	enter a tiny Forth-based recovery monitor
-	5.	support receiving a larger payload
-	6.	support basic integrity checking
-	7.	transfer control to a later runtime
+	3.	expose a tiny preserved control contract
+	4.	optionally verify the next payload
+	5.	transfer control to that payload
 
 Strong non-goals
 
@@ -266,90 +325,74 @@ The seed should not:
 	•	support many transports at once
 	•	perform fancy decompression
 	•	become a general OS in miniature
+	•	try to contain the whole development environment
 
-The recovery monitor should expose only a very small set of useful primitives.
-
-Forth monitor rationale
-
-A tiny Forth monitor is attractive because it is:
-	•	interactive
-	•	small
-	•	easy to extend
-	•	natural for memory inspection and hardware bring-up
-	•	compatible with the Collapse OS spirit
-
-But it must remain brutally constrained.
-
-Communication path
-
-Stage-0 should prefer one simple ingress path.
-
-Good candidates:
-	•	UART
-	•	debugger-assisted memory write then jump
-	•	SPI receive path on certain profiles
-	•	semihosting-like debugger channel on some targets
-
-Best default
-
-For many practical targets, UART is the best v1 default because it is:
-	•	simple
-	•	common
-	•	debuggable
-	•	easy to bridge from many tools
-
-But the design should allow profiles where stage-0 is entered through JTAG/SWD memory write and stage-1 is also loaded by debugger rather than UART.
+The larger recovery payload is where the real development foothold begins.
 
 ⸻
 
-Recovery monitor responsibilities
+Communication path
 
-The recovery monitor is entered directly from the seed.
-It is part of the seed design, not a separate stage.
+The seed should assume debugger/programmer ingress in v1.
 
-Responsibilities:
-	•	expose a tiny interactive Forth environment
-	•	support memory read/write
-	•	support payload upload
-	•	support payload integrity checks
-	•	optionally support flash write primitives on some profiles
-	•	prepare a handoff environment for later software
+That means:
+	•	the operator loads the seed through SWD/JTAG or equivalent
+	•	the operator may also load the next payload the same way
+	•	the seed does not need UART in order to justify its existence
 
-Conceptual model
-	•	Seed = architecture-specific bootstrap blob
-	•	Recovery monitor = first useful foothold
+Optional later transports:
+	•	UART
+	•	SPI
+	•	semihosting-like debugger channels
 
-The monitor should be treated as part of the seed artifact, but conceptually it is the first usable layer above raw bring-up.
+But these should be treated as later convenience, not as the definition of the seed concept.
+
+⸻
+
+Larger recovery payload
+
+The larger recovery payload is the first thing that should grow toward an actual development environment.
+
+Its responsibilities may include:
+	•	a richer monitor
+	•	payload transfer
+	•	better integrity checks
+	•	flash write primitives
+	•	memory map discovery
+	•	eventual climb toward assembler, compiler, editor, runtime, and storage
+
+Conceptual model:
+	•	seed = smallest preserved executable foothold
+	•	recovery payload = first actually comfortable foothold
+
+This keeps the seed small and honest.
+
+⸻
 
 Handoff contract
 
 Since the target OS is unspecified for now, define a neutral runtime handoff contract.
 
-Stage-1 should be able to hand control to a higher-level payload once these are true:
+The seed should be able to hand control to a larger payload once these are true:
 	•	entrypoint address known
 	•	stack pointer valid
-	•	memory regions known
-	•	payload integrity verified
-	•	one console/debug path optionally initialized
-	•	any profile-specific boot parameters prepared
+	•	memory regions known well enough
+	•	payload integrity verified if verification is included
+	•	any profile-specific preconditions prepared
 
-Minimal handoff structure
-
-Example conceptual handoff block:
+Minimal conceptual handoff block:
 
 struct handoff_info {
   arch_id
   profile_id
   ram_base
   ram_size
-  console_type
-  console_addr
   payload_base
   payload_size
   flags
 }
 
-Stage-1 transfers control to:
+The seed or recovery payload transfers control to:
 
 payload_entry(handoff_info*)
 
@@ -361,16 +404,16 @@ Operator workflow
 
 Path A: full manual recovery
 	1.	identify architecture/profile
-	2.	transcribe stage-0 bytes from paper
+	2.	transcribe seed bytes from paper
 	3.	inject bytes into memory through debugger/programmer
-	4.	set entrypoint / PC
-	5.	run stage-0
-	6.	send stage-1 over chosen transport
-	7.	send higher-level payload
-	8.	hand off into runtime
+	4.	verify row checks and whole-image checksum
+	5.	set entrypoint / PC
+	6.	run the seed
+	7.	inject or load the larger recovery payload
+	8.	hand off into that payload
 
 Path B: mixed paper + machine assistance
-	1.	use camera/OCR or local script to reconstruct stage-0 from paper
+	1.	use camera/OCR or local script to reconstruct seed bytes from paper
 	2.	verify checksums
 	3.	inject via debugger
 	4.	continue as above
@@ -385,51 +428,19 @@ To keep the project real, v1 should choose:
 	•	one ISA
 	•	one platform profile
 	•	one paper encoding
-	•	one communication path
+	•	debugger-first ingress
 	•	one integrity scheme
-	•	one tiny Forth monitor
-	•	one handoff path into a larger runtime
+	•	one tiny foothold contract
+	•	one handoff path into a larger recovery payload
 
 Example v1:
 	•	ISA: ARMv7-M
-	•	profile: generic SRAM + UART profile
-	•	encoding: fixed-width hex words + line CRC
-	•	comms: UART receive
-	•	monitor: tiny Forth-based recovery environment
+	•	profile: generic SRAM + debugger profile
+	•	encoding: fixed-width hex words + row sum/XOR
+	•	ingress: debugger memory write
+	•	seed: tiny verify-and-jump foothold or tiny stack-based control stub
 
 That is enough to validate the concept.
-
-⸻
-
-Tiny payload protocol
-
-Keep it boring.
-
-Packet fields:
-	•	type
-	•	target address
-	•	length
-	•	payload bytes
-	•	checksum
-
-Commands:
-	•	WRITE
-	•	VERIFY
-	•	JUMP
-	•	PING
-	•	INFO
-
-Possible flow:
-	1.	PING
-	2.	WRITE chunks
-	3.	VERIFY whole payload
-	4.	JUMP entry
-
-No negotiation complexity unless needed.
-
-The protocol should be simple enough to implement using the primitives exposed by the Forth recovery monitor.
-
-The protocol should be simple enough to implement using the primitives exposed by the Forth recovery monitor.
 
 ⸻
 
@@ -446,7 +457,7 @@ It does not need to solve full adversarial authenticity yet.
 Recommended v1:
 	•	paper lines: byte sum mod 256 plus XOR byte
 	•	seed image: CRC32 or similar whole-image checksum
-	•	payload transfer: packet checksum + whole-image checksum
+	•	larger payload: checksum or stronger verification as needed
 
 Later versions may add:
 	•	signatures
@@ -488,19 +499,19 @@ This design starts lower.
 
 It asks:
 
-What is the smallest printed artifact that can restore a path back into software?
+What is the smallest printed executable artifact that can restore a path back into software?
 
 That is the heart of the project.
 
 ⸻
 
 Open questions
-	1.	What checksum scheme is best for manual workflows?
-	2.	Should the paper format be word-oriented or byte-oriented?
-	3.	How much platform information should be embedded in the seed vs the profile sheet?
-	4.	Should stage-0 ever support more than one transport?
-	5.	How should the operator identify the correct profile for an unknown board?
-	6.	What is the best first target architecture?
+	1.	How small can the seed remain while still being useful?
+	2.	Should the seed be only verify-and-jump, or minimally interactive?
+	3.	Should the paper format be word-oriented or byte-oriented?
+	4.	How much platform information should be embedded in the seed vs the profile sheet?
+	5.	What is the best first target architecture?
+	6.	What is the right first larger recovery payload after the seed?
 	7.	Should the handoff contract be binary, textual, or both?
 
 ⸻
@@ -512,10 +523,10 @@ Write a v1 specification for exactly one target with these sections:
 	2.	paper encoding format
 	3.	seed binary layout
 	4.	entry/load semantics
-	5.	UART or debugger transport details
-	6.	tiny Forth monitor primitives
-	7.	payload packet format
-	8.	handoff contract
+	5.	debugger ingress details
+	6.	seed foothold contract
+	7.	larger recovery payload handoff
+	8.	path from recovery payload into a usable dev environment
 
 That will force the concept into something testable.
 
@@ -523,4 +534,4 @@ That will force the concept into something testable.
 
 One-sentence summary
 
-A paper seed bootstrap is a tiny printed, architecture-specific machine-code artifact that can be manually or mechanically reconstructed, injected into controllable hardware, and used to load a larger recovery payload that hands off into a higher-level runtime.
+A paper seed bootstrap is the smallest printed, architecture-specific executable foothold that can be reconstructed, injected into controllable hardware, and used to re-establish a path into larger recovery software and eventually a development environment.

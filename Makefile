@@ -17,14 +17,12 @@ SEED_BIN := $(OUT_DIR)/seed.bin
 SEED_LISTING := $(OUT_DIR)/seed.lst
 SEED_TEXT := $(OUT_DIR)/seed.paper.txt
 SEED_PDF := $(OUT_DIR)/seed.paper.pdf
-PATCH_TEXT := $(OUT_DIR)/profile.patch.txt
-PATCH_PDF := $(OUT_DIR)/profile.patch.pdf
 
 .PHONY: all clean paper cortex-m-paper
 
 all: paper
 
-paper: $(SEED_LISTING) $(SEED_TEXT) $(SEED_PDF) $(PATCH_TEXT) $(PATCH_PDF)
+paper: $(SEED_LISTING) $(SEED_TEXT) $(SEED_PDF)
 
 cortex-m-paper: paper
 
@@ -55,13 +53,3 @@ $(SEED_PDF): $(SEED_BIN) $(TARGET_DIR)/profile.json tools/paper_seed.py | $(OUT_
 		--profile $(TARGET_DIR)/profile.json \
 		--input $(SEED_BIN) \
 		--pdf $@
-
-$(PATCH_TEXT): $(TARGET_DIR)/profile.json tools/paper_seed.py | $(OUT_DIR)
-	$(PYTHON) tools/paper_seed.py \
-		--profile $(TARGET_DIR)/profile.json \
-		--patch-text $@
-
-$(PATCH_PDF): $(TARGET_DIR)/profile.json tools/paper_seed.py | $(OUT_DIR)
-	$(PYTHON) tools/paper_seed.py \
-		--profile $(TARGET_DIR)/profile.json \
-		--patch-pdf $@

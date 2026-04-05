@@ -8,7 +8,7 @@ This repository is targeting these stage-0 seed families:
 | 6502 | Planned | No QEMU target | `cc65` (`ca65`, `ld65`), `dasm`, `acme` | QEMU does not provide a `qemu-system-6502` binary. |
 | 8086 | Planned | `qemu-system-i386` | `nasm`, `clang`, `ld.lld` | We use the i386 system emulator for 16-bit real-mode bring-up. |
 | x86_64 | Planned | `qemu-system-x86_64` | `clang`, `ld.lld`, `nasm`, `gdb` | Suitable for BIOS/bootloader and long-mode experiments. |
-| ARMv7-M | Implemented v1 for `GENERIC-CORTEX-M-UART-PATCH-TABLE` | `qemu-system-arm` | `arm-none-eabi-*`, `openocd`, `gdb` | The repository now includes a UART-backed seed monitor with a fixed in-image patch table. |
+| ARMv7-M | Implemented v1 for `GENERIC-CORTEX-M-SRAM-DEBUGGER` | `qemu-system-arm` | `arm-none-eabi-*`, `openocd`, `gdb` | The repository now includes a debugger-first verify-and-jump seed for Cortex-M. |
 | AArch64 | Planned | `qemu-system-aarch64` | `aarch64-none-elf-*`, `gdb` | Bare-metal AArch64 support is included in the shell. |
 | AVR | Planned | `qemu-system-avr` | `avr-*`, `avrdude` | Useful for very small bootstrap experiments. |
 | RISC-V | Planned | `qemu-system-riscv32`, `qemu-system-riscv64` | `riscv32-none-elf-*`, `riscv64-none-elf-*` | Covers both RV32 and RV64 families. |
