@@ -57,6 +57,11 @@ def build_document(profile, data):
     entry = int.from_bytes(data[4:8], "little")
     line_bytes = int(profile.get("line_bytes", 16))
     whole_crc = binascii.crc32(data) & 0xFFFFFFFF
+    control_block = parse_u32(profile["control_block_address"])
+    input_buffer = parse_u32(profile["input_buffer_address"])
+    output_buffer = parse_u32(profile["output_buffer_address"])
+    input_size = int(profile["input_buffer_size"])
+    output_size = int(profile["output_buffer_size"])
 
     lines = [
         "EMBER PAPER SEED",
@@ -69,10 +74,9 @@ def build_document(profile, data):
         f"ENTRY: 0x{entry:08X}",
         f"LEN: 0x{len(data):08X}",
         f"HASH32: {whole_crc:08X}",
-        f"RECOVERY HANDOFF: {format_hex32(parse_u32(profile['recovery_handoff_address']))}",
-        f"RECOVERY PAYLOAD: {format_hex32(parse_u32(profile['recovery_payload_address']))}",
-        f"RECOVERY LIMIT: {format_hex32(parse_u32(profile['recovery_payload_limit']))}",
-        f"HANDOFF MAGIC: {format_hex32(parse_u32(profile['recovery_handoff_magic']))}",
+        f"CTRL: {format_hex32(control_block)}",
+        f"INPUT: {format_hex32(input_buffer)} LEN=0x{input_size:08X}",
+        f"OUTPUT: {format_hex32(output_buffer)} LEN=0x{output_size:08X}",
         "",
     ]
 

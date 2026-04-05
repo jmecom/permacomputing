@@ -1,22 +1,26 @@
 {
   "architecture": "ARMV7-M",
-  "profile": "GENERIC-CORTEX-M-SRAM-DEBUGGER",
+  "profile": "GENERIC-CORTEX-M-SRAM-DEBUG-REPL",
   "version": 1,
   "load_address": "0x20000000",
-  "recovery_handoff_address": "0x20000800",
-  "recovery_payload_address": "0x20001000",
-  "recovery_payload_limit": "0x00004000",
-  "recovery_handoff_magic": "0x31424D45",
+  "control_block_address": "0x20007000",
+  "input_buffer_address": "0x20007020",
+  "input_buffer_size": 128,
+  "output_buffer_address": "0x200070A0",
+  "output_buffer_size": 384,
   "stack_top": "0x20008000",
   "line_bytes": 16,
   "notes": [
     "Load the seed image at 0x20000000.",
-    "Load the larger recovery payload at 0x20001000 through the debugger before starting the seed.",
-    "Write the handoff block at 0x20000800 as: magic, payload_base, payload_size, payload_crc32.",
-    "Set MSP from the first word in the seed image and PC from the second word in the seed image.",
+    "Set MSP from the first word in the seed image and PC from the second word in the seed image, then run it.",
     "For each row, add all bytes and keep the low 8 bits for S. XOR all bytes for X.",
     "Verify each row before entry, then verify HASH32 after reconstructing the full image.",
-    "If the handoff block is invalid or the payload CRC32 does not match, the seed traps in a bkpt loop.",
-    "The seed is debugger-first in this profile. It does not require UART for initial ingress."
+    "After the seed starts, use the debugger as the transport: write an ASCII command into the input buffer, set input_len, then set request_seq to a value different from response_seq and resume execution.",
+    "When the seed finishes a command it copies text results into the output buffer, sets output_len, copies request_seq into response_seq, and leaves state as READY.",
+    "Control block words are: magic, version, request_seq, response_seq, state, status, input_len, output_len.",
+    "State values are IDLE=0, BUSY=1, READY=2. Status values are OK=0, INPUT_TRUNCATED=1, UNKNOWN=2, STACK_UNDERFLOW=3, STACK_OVERFLOW=4, ALIGNMENT=5, RANGE=6, OUTPUT_TRUNCATED=7.",
+    "Monitor words are: ?, I, ., @, !, C@, C!, D, J, B.",
+    "Typical flow: patch MMIO with hex literals plus @/!/C@/C!, dump memory with ADDR LEN D, then jump to Thumb code with ENTRY J or boot a vector-table image with IMAGE B.",
+    "The seed is debugger-first for ingress and debugger-driven for its first REPL. Real I/O comes later."
   ]
 }
